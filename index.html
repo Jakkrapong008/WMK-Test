@@ -455,7 +455,8 @@ ${text.substring(0, 30000)} // Limit to avoid extremely huge payloads, though Ge
 }
             `;
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKeyToUse}`;
+            // แก้ไข URL เปลี่ยนเป็นโมเดลที่เสถียรและรองรับทั่วไป (gemini-2.5-flash)
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKeyToUse}`;
             const payload = {
                 contents: [{ parts: [{ text: prompt }] }],
                 systemInstruction: { parts: [{ text: systemInstruction }] },
