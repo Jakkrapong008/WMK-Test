@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบช่วยตรวจความถูกต้องของข้อสอบ โรงเรียนวัดแม่กะ</title>
+    
+    <!-- Google Fonts: Sarabun -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Mammoth.js for DOCX parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Sarabun', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#dc2626', // Red 600
+                        secondary: '#eab308', // Yellow 500
+                        darkRed: '#991b1b', // Red 800
+                        lightYellow: '#fef08a', // Yellow 200
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #fffbeb; /* yellow-50 */
+        }
+        .file-drop-area {
+            transition: all 0.3s ease;
+        }
+        .file-drop-area.dragover {
+            background-color: #fee2e2; /* red-100 */
+            border-color: #dc2626;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #fca5a5; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ef4444; 
+        }
+    </style>
+</head>
+<body class="min-h-screen text-gray-800 flex flex-col items-center py-8 px-4 sm:px-6 lg:px-8">
+
+    <!-- Header Section -->
+    <header class="w-full max-w-5xl bg-white rounded-2xl shadow-lg p-6 mb-8 border-t-8 border-primary flex flex-col sm:flex-row items-center gap-6 relative">
+        <img src="https://img2.pic.in.th/logob0b7643db577ceee.png" alt="โลโก้โรงเรียนวัดแม่กะ" class="h-24 w-24 object-contain drop-shadow-md">
+        <div class="text-center sm:text-left flex-grow">
+            <h1 class="text-2xl sm:text-3xl font-bold text-darkRed mb-2">ระบบช่วยตรวจความถูกต้องของข้อสอบ</h1>
+            <p class="text-lg text-secondary font-semibold"><i class="fas fa-school mr-2"></i>โรงเรียนวัดแม่กะ</p>
+            <p class="text-sm text-gray-500 mt-1">วิเคราะห์และให้คำแนะนำโดย AI ผู้เชี่ยวชาญด้านหลักสูตร</p>
+        </div>
+        <button id="settingsBtn" class="absolute top-4 right-4 sm:static text-gray-400 hover:text-primary transition-colors p-2" title="ตั้งค่าระบบ">
+            <i class="fas fa-cog text-2xl"></i>
+        </button>
+    </header>
+
+    <!-- Main Content -->
+    <main class="w-full max-w-5xl flex flex-col gap-6">
+        
+        <!-- Upload Section -->
+        <section class="bg-white rounded-2xl shadow-md p-6 sm:p-10 text-center border border-gray-100">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">อัปโหลดไฟล์ข้อสอบ (รูปแบบ .docx เท่านั้น)</h2>
+            
+            <div id="drop-area" class="file-drop-area border-2 border-dashed border-red-300 rounded-xl p-8 sm:p-12 cursor-pointer bg-red-50 hover:bg-red-100 flex flex-col items-center justify-center relative">
+                <input type="file" id="fileElem" accept=".docx" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <i class="fas fa-file-word text-5xl text-red-500 mb-4"></i>
+                <p class="text-lg font-medium text-gray-700">คลิกเพื่อเลือกไฟล์ หรือ ลากไฟล์มาวางที่นี่</p>
+                <p class="text-sm text-gray-500 mt-2" id="file-name-display">รองรับไฟล์นามสกุล .docx</p>
+            </div>
+            
+            <button id="processBtn" class="mt-6 w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-primary to-secondary text-white font-bold rounded-lg shadow-md hover:shadow-lg transform hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed hidden">
+                <i class="fas fa-robot mr-2"></i> เริ่มต้นตรวจข้อสอบด้วย AI
+            </button>
+        </section>
+
+        <!-- Error / Info Message Box -->
+        <div id="messageBox" class="hidden rounded-lg p-4 shadow-sm font-medium"></div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="hidden flex-col items-center justify-center py-12 bg-white rounded-2xl shadow-md">
+            <div class="relative w-20 h-20">
+                <div class="absolute inset-0 rounded-full border-4 border-gray-200"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
+            </div>
+            <h3 class="text-xl font-bold mt-6 text-gray-700">กำลังวิเคราะห์ข้อสอบ...</h3>
+            <p class="text-gray-500 mt-2">AI กำลังตรวจสอบคำผิด ความสอดคล้อง และโครงสร้างของข้อสอบ</p>
+            <p class="text-sm text-red-500 mt-1 italic">*ขั้นตอนนี้อาจใช้เวลา 1-2 นาที*</p>
+        </div>
+
+        <!-- Results Section -->
+        <section id="resultsSection" class="hidden flex-col gap-6">
+            <div class="bg-gradient-to-r from-red-600 to-yellow-500 rounded-2xl p-6 text-white shadow-md flex items-center justify-between">
+                <h2 class="text-2xl font-bold"><i class="fas fa-clipboard-check mr-2"></i> ผลการวิเคราะห์ข้อสอบ</h2>
+                <button onclick="window.location.reload()" class="bg-white text-red-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-100 transition">ตรวจไฟล์ใหม่</button>
+            </div>
+
+            <!-- 1. หัวข้อสอบ -->
+            <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-blue-500">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><span class="bg-blue-100 text-blue-600 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">1</span> ความถูกต้องของส่วนหัวข้อสอบและคำชี้แจง</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="res-header">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+
+            <!-- 2. จำนวนข้อสอบและตัวเลือก -->
+            <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-green-500">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><span class="bg-green-100 text-green-600 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">2</span> ลำดับข้อสอบและการเรียงตัวเลือก</h3>
+                <div id="res-numbering" class="space-y-3">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+
+            <!-- 3. คำผิดในข้อสอบ -->
+            <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-red-500">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><span class="bg-red-100 text-red-600 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">3</span> การตรวจสอบคำผิด</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-red-50 text-red-700">
+                                <th class="p-3 border-b-2 border-red-200">ข้อที่</th>
+                                <th class="p-3 border-b-2 border-red-200">คำที่ผิด</th>
+                                <th class="p-3 border-b-2 border-red-200">คำที่ถูกต้อง</th>
+                            </tr>
+                        </thead>
+                        <tbody id="res-typos">
+                            <!-- Injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 4. เนื้อหากับตัวชี้วัด -->
+            <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-purple-500">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><span class="bg-purple-100 text-purple-600 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">4</span> ข้อที่ไม่สอดคล้องกับตัวชี้วัด (พร้อมข้อเสนอแนะ)</h3>
+                <p class="text-gray-600 mb-4 text-sm">*แสดงผลเฉพาะข้อที่มีปัญหาหรือควรปรับปรุงเพื่อให้ตรงตัวชี้วัดมากขึ้น*</p>
+                <div id="res-alignment" class="space-y-6">
+                    <!-- Injected by JS -->
+                </div>
+            </div>
+
+            <!-- 5. ข้อเสนอแนะอื่นๆ -->
+            <div class="bg-white rounded-2xl shadow-md p-6 border-l-4 border-yellow-500">
+                <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><span class="bg-yellow-100 text-yellow-600 w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm">5</span> ข้อเสนอแนะอื่นๆ เพื่อการพัฒนา</h3>
+                <ul id="res-suggestions" class="list-disc list-inside space-y-2 text-gray-700 ml-2">
+                    <!-- Injected by JS -->
+                </ul>
+            </div>
+            
+            <div class="text-center text-gray-500 text-sm mt-4">
+                <p>รายงานสร้างโดยระบบ AI - กรุณาตรวจสอบความถูกต้องขั้นสุดท้ายโดยบุคลากรอีกครั้ง</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- API Key Modal -->
+    <div id="apiModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div class="bg-primary p-4 text-white flex justify-between items-center">
+                <h3 class="font-bold text-lg"><i class="fas fa-key mr-2"></i> ตั้งค่า Gemini API Key</h3>
+                <button id="closeModalBtn" class="text-white hover:text-red-200 transition"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-600 mb-4">ระบบนี้จำเป็นต้องใช้ API Key ของ Google Gemini ในการประมวลผล (ข้อมูลนี้จะถูกเก็บไว้ในเบราว์เซอร์ของคุณเท่านั้น ปลอดภัยแน่นอน)</p>
+                <input type="password" id="apiKeyInput" placeholder="กรอก API Key ของคุณที่นี่..." class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary mb-4">
+                <div class="flex justify-end gap-3">
+                    <button id="removeKeyBtn" class="px-4 py-2 text-red-600 font-medium hover:bg-red-50 rounded-lg transition hidden">ลบ Key ที่บันทึกไว้</button>
+                    <button id="saveKeyBtn" class="px-6 py-2 bg-primary text-white font-bold rounded-lg hover:bg-red-700 transition">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-12 w-full text-center text-gray-500 text-sm pb-8">
+        <p>&copy; 2026 ระบบช่วยตรวจความถูกต้องของข้อสอบ โรงเรียนวัดแม่กะ. All rights reserved.</p>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // DOM Elements
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('fileElem');
+        const fileNameDisplay = document.getElementById('file-name-display');
+        const processBtn = document.getElementById('processBtn');
+        const loadingState = document.getElementById('loadingState');
+        const resultsSection = document.getElementById('resultsSection');
+        const messageBox = document.getElementById('messageBox');
+        const uploadSection = document.querySelector('section:first-of-type');
+        
+        // API Key Modal Elements
+        const settingsBtn = document.getElementById('settingsBtn');
+        const apiModal = document.getElementById('apiModal');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const saveKeyBtn = document.getElementById('saveKeyBtn');
+        const removeKeyBtn = document.getElementById('removeKeyBtn');
+
+        let selectedFile = null;
+        let extractedText = "";
+        
+        // --- API Key Management ---
+        function getApiKey() {
+            return localStorage.getItem('gemini_api_key_school');
+        }
+
+        function openModal() {
+            const currentKey = getApiKey();
+            if (currentKey) {
+                apiKeyInput.value = currentKey;
+                removeKeyBtn.classList.remove('hidden');
+            } else {
+                apiKeyInput.value = '';
+                removeKeyBtn.classList.add('hidden');
+            }
+            apiModal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            apiModal.classList.add('hidden');
+        }
+
+        settingsBtn.addEventListener('click', openModal);
+        closeModalBtn.addEventListener('click', closeModal);
+        
+        // Close modal when clicking outside
+        apiModal.addEventListener('click', (e) => {
+            if (e.target === apiModal) closeModal();
+        });
+
+        saveKeyBtn.addEventListener('click', () => {
+            const val = apiKeyInput.value.trim();
+            if (val) {
+                localStorage.setItem('gemini_api_key_school', val);
+                closeModal();
+                showMessage("บันทึก API Key เรียบร้อยแล้ว", "info");
+            } else {
+                alert("กรุณากรอก API Key ก่อนบันทึก");
+            }
+        });
+
+        removeKeyBtn.addEventListener('click', () => {
+            localStorage.removeItem('gemini_api_key_school');
+            apiKeyInput.value = '';
+            removeKeyBtn.classList.add('hidden');
+            closeModal();
+            showMessage("ลบ API Key ออกจากระบบแล้ว", "info");
+        });
+        // ------------------------
+
+        // Drag and Drop Events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.remove('dragover'), false);
+        });
+
+        dropArea.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFiles, false);
+
+        function handleDrop(e) {
+            let dt = e.dataTransfer;
+            let files = dt.files;
+            handleFiles({ target: { files: files } });
+        }
+
+        function handleFiles(e) {
+            const file = e.target.files[0];
+            if (file && file.name.endsWith('.docx')) {
+                selectedFile = file;
+                fileNameDisplay.innerHTML = `<span class="text-green-600 font-bold"><i class="fas fa-check-circle"></i> เลือกไฟล์: ${file.name}</span>`;
+                processBtn.classList.remove('hidden');
+                hideMessage();
+            } else {
+                selectedFile = null;
+                fileNameDisplay.innerHTML = `<span class="text-red-500">กรุณาอัปโหลดไฟล์นามสกุล .docx เท่านั้น</span>`;
+                processBtn.classList.add('hidden');
+                showMessage("ไฟล์ไม่ถูกต้อง รองรับเฉพาะ .docx เท่านั้น", "error");
+            }
+        }
+
+        function showMessage(msg, type="info") {
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-blue-100', 'text-blue-700');
+            if(type === "error") {
+                messageBox.classList.add('bg-red-100', 'text-red-700', 'border', 'border-red-400');
+                messageBox.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i> ${msg}`;
+            } else {
+                messageBox.classList.add('bg-blue-100', 'text-blue-700', 'border', 'border-blue-400');
+                messageBox.innerHTML = `<i class="fas fa-info-circle mr-2"></i> ${msg}`;
+            }
+        }
+
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+
+        // Process File Button Click
+        processBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            
+            const currentApiKey = getApiKey();
+            if (!currentApiKey) {
+                openModal();
+                return;
+            }
+
+            // UI Changes
+            uploadSection.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+            resultsSection.classList.add('hidden');
+            hideMessage();
+
+            try {
+                // 1. Extract text from DOCX using mammoth
+                const arrayBuffer = await selectedFile.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                extractedText = result.value;
+
+                if (!extractedText || extractedText.trim() === "") {
+                    throw new Error("ไม่พบข้อความในไฟล์นี้ หรือไฟล์อาจเกิดความเสียหาย");
+                }
+
+                // 2. Send to Gemini API
+                await analyzeWithGemini(extractedText, currentApiKey);
+
+            } catch (error) {
+                console.error(error);
+                loadingState.classList.add('hidden');
+                uploadSection.classList.remove('hidden');
+                showMessage(`เกิดข้อผิดพลาด: ${error.message}`, "error");
+            }
+        });
+
+        // Retry logic with exponential backoff
+        async function fetchWithRetry(url, options, maxRetries = 5) {
+            let delay = 1000;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errText}`);
+                    }
+                    return await response.json();
+                } catch (e) {
+                    if (i === maxRetries - 1) throw e;
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        async function analyzeWithGemini(text, apiKeyToUse) {
+            const systemInstruction = `คุณคือผู้เชี่ยวชาญระดับสูงด้านการตรวจประเมินข้อสอบ การพิสูจน์อักษร และหลักสูตรการสอน หน้าที่ของคุณคือวิเคราะห์ข้อสอบที่ให้มาอย่างละเอียดถี่ถ้วน ตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นปน`;
+            
+            // Get Current Date context
+            const currentDateStr = "8 มีนาคม 2569";
+            const currentAcademicYear = "2568";
+            
+            const prompt = `
+วิเคราะห์ข้อสอบจากเนื้อหาต่อไปนี้:
+====================
+${text.substring(0, 30000)} // Limit to avoid extremely huge payloads, though Gemini handles large context well.
+====================
+
+ข้อมูลประกอบการพิจารณา:
+- วันที่ตรวจสอบเอกสารนี้คือ: ${currentDateStr}
+- ปีการศึกษาที่ถูกต้อง ณ ปัจจุบันคือ: ${currentAcademicYear} (ซึ่งครอบคลุม 1 พฤษภาคม 2568 ถึง 30 เมษายน 2569)
+
+กรุณาวิเคราะห์และประมวลผลตามหัวข้อต่อไปนี้อย่างเคร่งครัด:
+1. หัวข้อสอบ:
+   - ตรวจสอบชื่อวิชาว่าเขียนถูกต้องหรือมีความผิดปกติหรือไม่
+   - ตรวจสอบปีการศึกษาว่าใส่ถูกต้องหรือไม่ (ต้องเป็น 2568 ถ้าอ้างอิงจากวันที่ปัจจุบัน)
+   - ความสอดคล้องของคำชี้แจงกับข้อสอบจริง: เช่น ถ้าคำชี้แจงบอกว่ามี 4 ตัวเลือก แต่ข้อสอบมี 3 ตัวเลือก หรือบอกว่ามี 30 ข้อ แต่พบข้อสอบเพียง 20 ข้อ
+2. จำนวนข้อสอบและการเรียงตัวเลือก:
+   - มีข้อซ้ำหรือไม่
+   - เรียงเลขข้อถูกต้องหรือไม่ข้ามไปมา
+   - การเรียงตัวเลือก ก,ข,ค,ง ถูกต้องหรือไม่ (หากมีตัวเลือก จ หรือข้ามตัวอักษรให้ระบุ)
+3. คำผิดในข้อสอบ:
+   - ตรวจสอบการสะกดคำผิดทั้งหมด แจ้งเลขข้อ คำที่ผิด และคำที่ถูกต้อง
+4. เนื้อหาของข้อสอบกับตัวชี้วัด:
+   - วิเคราะห์ว่าโจทย์ในแต่ละข้อหรือแต่ละช่วงสอดคล้องกับตัวชี้วัดที่ระบุหรือไม่ (พยายามประเมินจากเนื้อหาข้อสอบเทียบกับระดับชั้นและวิชาโดยอนุมาน)
+   - **สำคัญ**: ให้แสดงผลลัพธ์ *เฉพาะ* ข้อที่ "ไม่สอดคล้อง" หรือมีปัญหาเท่านั้น 
+   - สำหรับข้อที่ไม่สอดคล้อง ให้ระบุเหตุผล และเสนอ "โจทย์ใหม่ ตัวเลือกใหม่ และเฉลย" ที่เหมาะสมกับตัวชี้วัดนั้น
+5. ข้อเสนอแนะอื่นๆ:
+   - คำแนะนำเพื่อการปรับปรุงเพิ่มเติมในภาพรวม
+
+จงตอบกลับเป็นรูปแบบ JSON ตาม Schema นี้เท่านั้น:
+{
+  "header_analysis": {
+    "subject_name_status": "ผลการตรวจชื่อวิชา (พร้อมคำอธิบาย)",
+    "academic_year_status": "ผลการตรวจปีการศึกษา (พร้อมคำอธิบาย เทียบกับปัจจุบัน)",
+    "options_consistency": "ผลการตรวจความสอดคล้องของจำนวนตัวเลือกกับคำชี้แจง",
+    "question_count_consistency": "ผลการตรวจจำนวนข้อกับคำชี้แจง",
+    "summary": "สรุปภาพรวมส่วนหัว"
+  },
+  "numbering_and_options": {
+    "duplicates": ["ข้อความอธิบายข้อที่ซ้ำ (ถ้าไม่มีให้ว่างไว้)"],
+    "sequence_issues": ["ข้อความอธิบายการเรียงเลขข้อที่ผิดปกติ (ถ้าไม่มีให้ว่างไว้)"],
+    "option_format_issues": ["ข้อความอธิบายความผิดปกติของตัวเลือก กขคง (ถ้าไม่มีให้ว่างไว้)"],
+    "summary": "สรุปภาพรวมข้อ 2"
+  },
+  "typos": [
+    { "question_number": "เลขข้อ", "wrong_word": "คำผิด", "correct_word": "คำที่ถูก" }
+  ],
+  "content_alignment": [
+    {
+      "indicator": "ตัวชี้วัด/หัวข้อที่อ้างอิง",
+      "old_question": "โจทย์เก่าที่ไม่สอดคล้อง",
+      "suggested_new_question": {
+        "question": "โจทย์ใหม่ที่เสนอ",
+        "options": ["ก. ...", "ข. ...", "ค. ...", "ง. ..."],
+        "answer": "ตัวเลือกที่เป็นเฉลย"
+      },
+      "reason": "เหตุผลที่ไม่สอดคล้องและทำไมต้องเปลี่ยน"
+    }
+  ],
+  "other_suggestions": ["ข้อเสนอแนะที่ 1", "ข้อเสนอแนะที่ 2"]
+}
+            `;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKeyToUse}`;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            const data = await fetchWithRetry(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!textResponse) {
+                throw new Error("ไม่ได้รับข้อมูลตอบกลับจากระบบ AI");
+            }
+
+            const jsonResponse = JSON.parse(textResponse);
+            renderResults(jsonResponse);
+        }
+
+        function renderResults(data) {
+            loadingState.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+
+            // 1. หัวข้อสอบ
+            const h = data.header_analysis;
+            document.getElementById('res-header').innerHTML = `
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h4 class="font-bold text-blue-800 text-sm mb-1">ชื่อวิชา / รายวิชา</h4>
+                    <p class="text-gray-700">${h.subject_name_status}</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h4 class="font-bold text-blue-800 text-sm mb-1">ปีการศึกษา</h4>
+                    <p class="text-gray-700">${h.academic_year_status}</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h4 class="font-bold text-blue-800 text-sm mb-1">ความสอดคล้องจำนวนตัวเลือก</h4>
+                    <p class="text-gray-700">${h.options_consistency}</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h4 class="font-bold text-blue-800 text-sm mb-1">ความสอดคล้องจำนวนข้อ</h4>
+                    <p class="text-gray-700">${h.question_count_consistency}</p>
+                </div>
+                <div class="col-span-1 md:col-span-2 mt-2 text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                    <strong>สรุป:</strong> ${h.summary}
+                </div>
+            `;
+
+            // 2. จำนวนข้อสอบ
+            const n = data.numbering_and_options;
+            let numHtml = '';
+            
+            const createList = (items, icon, color) => {
+                if(!items || items.length === 0) return `<div class="flex items-center text-green-600"><i class="fas fa-check-circle mr-2"></i> ปกติเรียบร้อยดี</div>`;
+                return `<ul class="list-disc pl-6 text-${color}-600 space-y-1">` + items.map(i => `<li>${i}</li>`).join('') + `</ul>`;
+            };
+
+            numHtml += `
+                <div><strong class="text-gray-800"><i class="fas fa-copy text-gray-500 mr-2"></i>ข้อซ้ำซ้อน:</strong> ${createList(n.duplicates, 'fa-exclamation-triangle', 'red')}</div>
+                <hr class="border-gray-100">
+                <div><strong class="text-gray-800"><i class="fas fa-sort-numeric-down text-gray-500 mr-2"></i>การเรียงลำดับข้อ:</strong> ${createList(n.sequence_issues, 'fa-exclamation-triangle', 'orange')}</div>
+                <hr class="border-gray-100">
+                <div><strong class="text-gray-800"><i class="fas fa-list-ul text-gray-500 mr-2"></i>รูปแบบตัวเลือก (ก,ข,ค,ง):</strong> ${createList(n.option_format_issues, 'fa-exclamation-triangle', 'orange')}</div>
+                <div class="mt-2 text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                    <strong>สรุป:</strong> ${n.summary}
+                </div>
+            `;
+            document.getElementById('res-numbering').innerHTML = numHtml;
+
+            // 3. คำผิด
+            const t = data.typos;
+            let typoHtml = '';
+            if (!t || t.length === 0) {
+                typoHtml = `<tr><td colspan="3" class="text-center p-4 text-green-600 font-bold"><i class="fas fa-check-circle mr-2"></i> ไม่พบคำสะกดผิดในข้อสอบ</td></tr>`;
+            } else {
+                typoHtml = t.map(item => `
+                    <tr class="border-b border-gray-100 hover:bg-red-50 transition">
+                        <td class="p-3 font-semibold text-gray-800">${item.question_number}</td>
+                        <td class="p-3 text-red-600 line-through">${item.wrong_word}</td>
+                        <td class="p-3 text-green-600 font-bold">${item.correct_word}</td>
+                    </tr>
+                `).join('');
+            }
+            document.getElementById('res-typos').innerHTML = typoHtml;
+
+            // 4. เนื้อหากับตัวชี้วัด
+            const c = data.content_alignment;
+            let alignHtml = '';
+            if (!c || c.length === 0) {
+                alignHtml = `<div class="bg-green-50 text-green-700 p-4 rounded-lg flex items-center"><i class="fas fa-check-circle text-2xl mr-3"></i> <div><strong>ยอดเยี่ยม!</strong> ข้อสอบมีความสอดคล้องกับตัวชี้วัดหรือวัตถุประสงค์การเรียนรู้ตามที่ประเมินได้</div></div>`;
+            } else {
+                alignHtml = c.map((item, index) => `
+                    <div class="border border-purple-200 rounded-xl overflow-hidden shadow-sm">
+                        <div class="bg-purple-50 p-3 border-b border-purple-200 flex justify-between items-center">
+                            <span class="font-bold text-purple-800">กรณีที่ ${index + 1}: ${item.indicator}</span>
+                        </div>
+                        <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- ข้อสอบเดิม -->
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <span class="inline-block bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded mb-2">โจทย์เดิม (ไม่สอดคล้อง)</span>
+                                <p class="text-gray-700 text-sm mb-2 whitespace-pre-line">${item.old_question}</p>
+                                <p class="text-xs text-red-600 mt-3"><strong>ปัญหา:</strong> ${item.reason}</p>
+                            </div>
+                            
+                            <!-- ข้อเสนอแนะใหม่ -->
+                            <div class="bg-green-50 p-4 rounded-lg border border-green-200">
+                                <span class="inline-block bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded mb-2">ข้อเสนอแนะโจทย์ใหม่</span>
+                                <p class="text-gray-800 font-semibold text-sm mb-2">${item.suggested_new_question.question}</p>
+                                <ul class="text-sm text-gray-700 space-y-1 mb-3">
+                                    ${item.suggested_new_question.options.map(opt => `<li>${opt}</li>`).join('')}
+                                </ul>
+                                <p class="text-xs font-bold text-green-700 bg-white p-2 rounded border border-green-100 inline-block">เฉลย: ${item.suggested_new_question.answer}</p>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+            document.getElementById('res-alignment').innerHTML = alignHtml;
+
+            // 5. ข้อเสนอแนะอื่นๆ
+            const s = data.other_suggestions;
+            let suggHtml = '';
+            if (!s || s.length === 0) {
+                suggHtml = `<li class="text-gray-500">ไม่มีข้อเสนอแนะเพิ่มเติม</li>`;
+            } else {
+                suggHtml = s.map(item => `<li>${item}</li>`).join('');
+            }
+            document.getElementById('res-suggestions').innerHTML = suggHtml;
+        }
+
+    </script>
+</body>
+</html>
